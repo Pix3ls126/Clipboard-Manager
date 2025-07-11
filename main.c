@@ -96,7 +96,7 @@ void clearClipboardHistory()
     printf("Clipboard history cleared.\n");
 }
 
-void *getCurrentTimeStamp()
+char *getCurrentTimeStamp()
 {
     char *buffer = (char *)malloc(20 * sizeof(char)); // Allocate memory for timestamp
     if (buffer == NULL)
@@ -152,4 +152,41 @@ void setClipboardText(const char *text)
     }
 
     CloseClipboard(); // Close the clipboard
+}
+
+void addClipboardEntry(const char *text)
+{
+    if (content == NULL || strlen(text) == 0)
+    {
+        fprintf(stderr, "Cannot add empty text to clipboard history.\n");
+        return;
+    }
+
+    if (clipCount > 0 && clipboardHistory[0].content != NULL &&
+        strcmp(clipboardHistory[0].content, text) == 0)
+    {
+        printf("Text is already the latest entry in clipboard history.\n");
+        return; // Do not add duplicate entries
+    }
+
+    if (clipCount >= MAX_CLIPBOARD_ENTRIES)
+    {
+        free(clipboardHistory[MAX_CLIPBOARD_ENTRIES - 1].content);
+        free(clipboardHistory[MAX_CLIPBOARD_ENTRIES - 1].timestamp);
+
+        for (int i = MAX_CLIPBOARD_ENTRIES - 1; i > 0; i--)
+        {
+            clipboardHistory[i] = clipboardHistory[i - 1]; // Shift entries
+        }
+    }
+    else
+    {
+        for (int i = clipCount; i > 0; i--)
+        {
+            clipboardHistory[i] = clipboardHistory[i - 1]; // Shift entries
+        }
+        clipCount++; // Increment the count
+    }
+
+    printf("Adding new entry to clipboard history.\n");
 }
