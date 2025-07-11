@@ -62,9 +62,9 @@ int main()
 
     monitorClipboard(); // Start monitoring the clipboard
 
-    clearClipboardHistory;
+    clearClipboardHistory(); // Call the function to clear history
 
-    return 1; // Exit successfully
+    return 0; // Exit successfully
 }
 
 void initializeClipboardHistory()
@@ -120,7 +120,7 @@ void setClipboardText(const char *text)
     }
     if (!OpenClipboard(NULL)) // Open the clipboard
     {
-        printf(stderr, "Failed to open clipboard.\n");
+        printf("Failed to open clipboard.\n");
         return;
     }
 
@@ -133,25 +133,25 @@ void setClipboardText(const char *text)
         printf("Failed to allocate memory for clipboard text.\n");
         return;
     }
-    char *memPtr = (char *)GlobalLock(hGlobal); // Lock the memory
+    char *memPtr = (char *)GlobalLock(hGlobal);
     if (memPtr == NULL)
     {
         printf("Failed to lock global memory for clipboard text.\n");
-        GlobalFree(hGlobal); // Free the allocated memory
+        GlobalFree(hGlobal);
         CloseClipboard();
         return;
     }
 
-    memcpy(memPtr, text, textLength); // Copy the text to the memory
-    GlobalUnlock(hGlobal);            // Unlock the memory
+    memcpy(memPtr, text, textLength);
+    GlobalUnlock(hGlobal);
 
-    if (SetClipboardData(CF_TEXT, hGlobal) == NULL) // Set the clipboard data
+    if (SetClipboardData(CF_TEXT, hGlobal) == NULL)
     {
         printf("Failed to set clipboard data.\n");
-        GlobalFree(hGlobal); // Free the allocated memory
+        GlobalFree(hGlobal);
     }
 
-    CloseClipboard(); // Close the clipboard
+    CloseClipboard();
 }
 
 void addClipboardEntry(const char *text)
@@ -166,7 +166,7 @@ void addClipboardEntry(const char *text)
         strcmp(clipboardHistory[0].content, text) == 0)
     {
         printf("Text is already the latest entry in clipboard history.\n");
-        return; // Do not add duplicate entries
+        return;
     }
 
     if (clipCount >= MAX_CLIPBOARD_ENTRIES)
@@ -176,21 +176,134 @@ void addClipboardEntry(const char *text)
 
         for (int i = MAX_CLIPBOARD_ENTRIES - 1; i > 0; i--)
         {
-            clipboardHistory[i] = clipboardHistory[i - 1]; // Shift entries
+            clipboardHistory[i] = clipboardHistory[i - 1];
         }
     }
     else
     {
         for (int i = clipCount; i > 0; i--)
         {
-            clipboardHistory[i] = clipboardHistory[i - 1]; // Shift entries
+            clipboardHistory[i] = clipboardHistory[i - 1];
         }
-        clipCount++; // Increment the count
+        clipCount++;
+    }
+
+    clipboardHistory[0].content = _strdup(text);
+    if (clipboardHistory[0].content == NULL)
+    {
+        fprintf(stderr, "Memory allocation failed for clipboard content.\n");
+        return;
+    }
+
+    // Add timestamp to the entry
+    clipboardHistory[0].timestamp = getCurrentTimeStamp();
+    if (clipboardHistory[0].timestamp == NULL)
+    {
+        free(clipboardHistory[0].content);
+        clipboardHistory[0].content = NULL;
+        return;
     }
 
     printf("Adding new entry to clipboard history.\n");
 }
 
-void displayClipboardHistory() {}
+void displayClipboardHistory()
+{
+    printf("\n===== Clipboard History (%d entries) =====\n", clipCount);
 
-void monitorClipboard() {}
+    for (int i = 0; i < clipCount; i++)
+    {
+        printf("%d. [%s] %.50s%s\n",
+               i + 1,
+               clipboardHistory[i].timestamp,
+               clipboardHistory[i].content,
+               strlen(clipboardHistory[i].content) > 50 ? "..." : "");
+    }
+
+    printf("=======================================\n");
+}
+
+void monitorClipboard()
+{
+    char *prevText = NULL;
+    char currentText[MAX_TEXT_LENGTH];
+    UINT clipboardFormat = CF_TEXT;
+    HWND hwnd = GetConsoleWindow();
+    BOOL running = TRUE;
+    int skipMonitoringCount = 0;
+
+    printf("\nMonitoring clipboard for changes...\n");
+    printf("=========================================\n");
+    printf("What would you like to do:\n");
+    printf("  D. Display clipboard history\n");
+    printf("  1-%d. Copy previous clipboard entry to clipboard\n", MAX_CLIPBOARD_ENTRIES);
+    printf("  C. Clear clipboard history\n");
+    printf("  Q. Quit\n");
+
+    while (running)
+    {
+        if (_kbhit())
+        {
+            char key = _getch();
+            if (key == 'D' || key == 'd')
+            {
+                displayClipboardHistory();
+            }
+            else if (key >= '1' && key <= '9' && (key - '0') <= clipCount)
+            {
+                int index = key - '1';
+                printf("Restoring entry %d to clipboard: %s\n", index + 1, clipboardHistory[index].content);
+
+                setClipboardText(clipboardHistory[index].content);
+                skipMonitoringCount = 10;
+            }
+            else if (key == 'C' || key == 'c')
+            {
+                clearClipboardHistory();
+                skipMonitoringCount = 0;
+            }
+            else if (key == 'Q' || key == 'q')
+            {
+                printf("Exiting clipboard monitor...\n");
+                clearClipboardHistory();
+                running = FALSE;
+                continue;
+            }
+        }
+        // Only check clipboard if we're not in a skip cycle
+        if (skipMonitoringCount > 0)
+        {
+            skipMonitoringCount--;
+        }
+        else if (OpenClipboard(hwnd))
+        {
+            HANDLE hData = GetClipboardData(clipboardFormat);
+
+            if (hData != NULL)
+            {
+                LPCSTR clipboardText = (LPCSTR)GlobalLock(hData);
+                if (clipboardText != NULL)
+                {
+                    strncpy(currentText, clipboardText, MAX_TEXT_LENGTH - 1);
+                    currentText[MAX_TEXT_LENGTH - 1] = '\0';
+
+                    if (prevText == NULL || strcmp(prevText, currentText) != 0)
+                    {
+                        free(prevText);
+                        prevText = _strdup(currentText);
+                        addClipboardEntry(currentText);
+                    }
+
+                    GlobalUnlock(hData);
+                }
+            }
+
+            CloseClipboard();
+        }
+        Sleep(500);
+    }
+    if (prevText != NULL)
+    {
+        free(prevText);
+    }
+}
