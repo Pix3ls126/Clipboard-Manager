@@ -156,7 +156,7 @@ void setClipboardText(const char *text)
 
 void addClipboardEntry(const char *text)
 {
-    if (content == NULL || strlen(text) == 0)
+    if (text == NULL || strlen(text) == 0)
     {
         fprintf(stderr, "Cannot add empty text to clipboard history.\n");
         return;
@@ -190,3 +190,7 @@ void addClipboardEntry(const char *text)
 
     printf("Adding new entry to clipboard history.\n");
 }
+
+void displayClipboardHistory() {}
+
+void monitorClipboard() {}
